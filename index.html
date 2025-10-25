@@ -3,110 +3,121 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>StreamBox+ — Web Player</title>
+  <title>StreamBox+ — Browser Mode & Link Finder</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- hls.js for .m3u8 playback -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <div id="app" class="app">
     <nav class="topbar">
-      <div class="brand">
-        <div class="logo">Stream<span>Box+</span></div>
-      </div>
-
+      <div class="brand">StreamBox+</div>
       <div class="top-actions">
-        <button id="themeToggle" class="icon-btn" title="Toggle theme">🌓</button>
-        <button id="downloadsBtn" class="icon-btn" title="My Downloads">⬇️</button>
+        <button id="themeToggle" class="icon-btn">🌓</button>
+        <button id="downloadsBtn" class="icon-btn">⬇️</button>
       </div>
     </nav>
 
     <main class="main">
-      <section class="hero">
-        <div class="left">
-          <h1 class="title">Paste a streaming link. Watch like it's native.</h1>
-          <p class="sub">MP4 & HLS support • subtitles • offline • resume • mobile ready</p>
+      <section class="left-col">
+        <h1>Paste stream link or use the built-in browser</h1>
+        <p class="muted">Supports MP4 and HLS (.m3u8). Search subtitles (OpenSubtitles) — enter API key in settings.</p>
 
-          <div class="input-row">
-            <input id="linkInput" type="text" placeholder="Paste mp4 or m3u8 link here" autocomplete="off" />
-            <button id="loadBtn" class="cta">Load</button>
-          </div>
-
-          <div class="meta-row">
-            <input id="titleInput" type="text" placeholder="Optional: movie / show title (used for subtitle search)" />
-            <button id="searchSubsBtn" class="small">Search Subtitles</button>
-            <input id="subFile" type="file" accept=".vtt,.srt" style="display:none" />
-            <button id="addSubBtn" class="small">Upload Subtitle</button>
-          </div>
-
-          <div class="player-actions">
-            <button id="bookmarkBtn" class="ghost">Bookmark</button>
-            <button id="historyBtn" class="ghost">History</button>
-          </div>
+        <div class="input-row">
+          <input id="linkInput" placeholder="Paste mp4 or m3u8 link here" />
+          <button id="loadBtn" class="cta">Load</button>
         </div>
 
-        <div class="right">
-          <div class="player-shell">
-            <div id="poster" class="poster">Preview</div>
-            <div class="video-frame">
-              <video id="player" playsinline></video>
-              <div id="controlsOverlay" class="controls-overlay hidden">
-                <!-- big controls -->
-                <button id="bigPlay" class="big-play">▶</button>
-              </div>
+        <div class="meta-row">
+          <input id="titleInput" placeholder="Optional title (for subtitle search & history)" />
+          <button id="searchSubsBtn" class="small">Search Subtitles</button>
+          <button id="addSubBtn" class="small">Upload Subtitle</button>
+          <input id="subFile" type="file" accept=".vtt,.srt" style="display:none" />
+        </div>
+
+        <div class="player-actions">
+          <button id="bookmarkBtn" class="ghost">Bookmark</button>
+          <button id="historyBtn" class="ghost">History</button>
+        </div>
+
+        <hr />
+
+        <h2>Browser Mode — open a site and find stream links</h2>
+        <div class="browser-controls">
+          <input id="browseUrl" placeholder="https://example.com/watch/..." />
+          <button id="openBrowser" class="small">Open</button>
+          <button id="backBtn" class="small">◀</button>
+          <button id="forwardBtn" class="small">▶</button>
+          <button id="reloadBtn" class="small">⟳</button>
+        </div>
+
+        <div class="proxy-row">
+          <label class="muted">Optional CORS proxy (leave blank to use bookmarklet):</label>
+          <input id="proxyInput" placeholder="https://your-proxy.example/fetch?url=" />
+          <button id="scanBtn" class="small">Scan Page (via proxy)</button>
+          <div class="muted small">Scan will try to fetch page HTML via proxy to find .mp4/.m3u8 links.</div>
+        </div>
+
+        <div class="bookmarklet-box">
+          <button id="generateBookmarklet" class="small">Generate Bookmarklet</button>
+          <div id="bookmarkletContainer" class="muted small"></div>
+          <div class="muted small">Drag the generated bookmarklet to your bookmarks bar or copy it and create a bookmark.</div>
+        </div>
+
+        <hr />
+
+        <h3>Found Links</h3>
+        <div id="foundLinks" class="list"></div>
+      </section>
+
+      <section class="right-col">
+        <div class="player-shell">
+          <video id="player" playsinline></video>
+          <div class="player-controls">
+            <div class="left-controls">
+              <button id="playPause" class="ctrl">⏯</button>
+              <button id="rew10" class="ctrl">⟲10</button>
+              <button id="fwd10" class="ctrl">10⟳</button>
+              <input id="seek" type="range" min="0" max="100" value="0" />
+              <div class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
             </div>
-
-            <div class="player-controls">
-              <div class="left-controls">
-                <button id="playPause" class="ctrl">⏯</button>
-                <button id="rew10" class="ctrl">⟲10</button>
-                <button id="fwd10" class="ctrl">10⟳</button>
-                <button id="frameBack" class="ctrl">◀︎1f</button>
-                <button id="frameFwd" class="ctrl">1f▶︎</button>
-                <div class="seek-wrap">
-                  <input id="seek" type="range" min="0" max="100" value="0" />
-                  <div class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
-                </div>
-              </div>
-
-              <div class="right-controls">
-                <button id="pipBtn" class="ctrl">⧉</button>
-                <button id="fullscreenBtn" class="ctrl">⛶</button>
-                <select id="speed" class="speed">
-                  <option>0.5x</option><option>0.75x</option><option selected>1x</option><option>1.25x</option><option>1.5x</option><option>2x</option>
-                </select>
-                <input id="vol" type="range" min="0" max="1" step="0.01" value="1" />
-                <button id="downloadNow" class="ctrl primary">Download</button>
-                <button id="saveSub" class="ctrl">Save Subtitle</button>
-              </div>
+            <div class="right-controls">
+              <select id="speed">
+                <option>0.5x</option><option>0.75x</option><option selected>1x</option><option>1.25x</option><option>1.5x</option><option>2x</option>
+              </select>
+              <input id="vol" type="range" min="0" max="1" step="0.01" value="1" />
+              <button id="pipBtn" class="ctrl">⧉</button>
+              <button id="fullscreenBtn" class="ctrl">⛶</button>
+              <button id="downloadNow" class="ctrl primary">Download</button>
             </div>
+          </div>
 
-            <div id="loader" class="loader hidden">Loading…</div>
+          <div id="loader" class="loader hidden">Loading…</div>
+        </div>
+
+        <div class="panels-row">
+          <div class="panel">
+            <h4>My Downloads</h4>
+            <div id="downloadsList" class="list"></div>
+          </div>
+          <div class="panel">
+            <h4>History</h4>
+            <div id="historyList" class="list"></div>
+          </div>
+          <div class="panel">
+            <h4>Subtitle Results</h4>
+            <div id="subsList" class="list"></div>
           </div>
         </div>
       </section>
 
-      <section class="lower">
-        <div class="panel" id="downloadsPanel">
-          <h3>My Downloads</h3>
-          <div id="downloadsList" class="list"></div>
-        </div>
-
-        <div class="panel" id="historyPanel">
-          <h3>Recent</h3>
-          <div id="historyList" class="list"></div>
-        </div>
-
-        <div class="panel" id="subsPanel">
-          <h3>Subtitle Results</h3>
-          <div id="subsList" class="list"></div>
-        </div>
+      <section class="browser-area">
+        <iframe id="siteFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" src="" title="Browser Mode"></iframe>
       </section>
     </main>
 
     <footer class="footer">
-      <small>StreamBox+ — client demo. Use legal links only.</small>
+      <small>StreamBox+ — English only. Use legal links. Bookmarklet helps extract links from pages that block cross-origin fetches.</small>
     </footer>
   </div>
 </body>
