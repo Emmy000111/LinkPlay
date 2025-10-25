@@ -3,40 +3,49 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StreamBox</title>
+  <title>StreamBox+</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="app">
+  <div class="wrapper">
     <header>
-      <h1>StreamBox</h1>
+      <h1><span class="accent">Stream</span>Box+</h1>
     </header>
 
     <main>
-      <div class="input-section">
+      <section class="input-area">
         <input
           type="text"
           id="streamLink"
-          placeholder="Paste video link here..."
+          placeholder="Paste or enter your video link..."
         />
         <button id="playBtn">Play</button>
-      </div>
+      </section>
 
-      <div class="player-container">
-        <video id="videoPlayer" controls></video>
-      </div>
+      <section class="video-section">
+        <div class="video-container" id="videoContainer">
+          <video id="videoPlayer" controls></video>
+          <input type="file" id="subtitleInput" accept=".vtt,.srt" hidden />
+        </div>
 
-      <div class="actions">
-        <button id="downloadBtn">Download</button>
-        <button id="clearBtn">Clear</button>
-      </div>
+        <div class="controls">
+          <button id="subBtn">Add Subtitles</button>
+          <button id="speedBtn">1x Speed</button>
+          <button id="downloadBtn">Download</button>
+          <button id="clearBtn">Clear</button>
+        </div>
+      </section>
+
+      <section class="tips">
+        <p>💡 Try this test link:<br>
+        <code>http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4</code></p>
+      </section>
     </main>
 
     <footer>
-      <p>© 2025 StreamBox — built for testing public video links only</p>
+      <p>© 2025 StreamBox+ • A smarter way to stream</p>
     </footer>
   </div>
-
-  <script src="app.js"></script>
 </body>
 </html>
