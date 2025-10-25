@@ -1,74 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>StreamPlayer Web</title>
-
-  <link rel="stylesheet" href="styles.css" />
-  <!-- hls.js for m3u8/HLS playback -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StreamBox</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>StreamPlayer</h1>
+      <h1>StreamBox</h1>
     </header>
 
     <main>
-      <section class="input-row">
-        <input id="urlInput" type="text" placeholder="Paste streaming link (mp4 or m3u8)"/>
+      <div class="input-section">
+        <input
+          type="text"
+          id="streamLink"
+          placeholder="Paste video link here..."
+        />
         <button id="playBtn">Play</button>
-      </section>
+      </div>
 
-      <section class="player-card">
-        <div class="video-wrap">
-          <video id="video" playsinline controls></video>
-        </div>
+      <div class="player-container">
+        <video id="videoPlayer" controls></video>
+      </div>
 
-        <div class="controls">
-          <button id="playPause" class="small">Play</button>
-          <button id="back10" class="small">« 10s</button>
-          <button id="forward10" class="small">10s »</button>
-
-          <label class="small">Speed
-            <select id="speed">
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1" selected>1x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
-            </select>
-          </label>
-
-          <button id="fullscreen" class="small">Fullscreen</button>
-          <button id="downloadBtn" class="primary">Download for Offline</button>
-        </div>
-
-        <div class="progress-row">
-          <input id="seek" type="range" min="0" max="100" value="0"/>
-          <div class="time">
-            <span id="curTime">0:00</span> / <span id="durTime">0:00</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="downloads">
-        <h2>My Downloads</h2>
-        <div id="downloadsList" class="downloads-list">
-          <!-- list populated by JS -->
-        </div>
-      </section>
-
-      <div id="toast" class="toast hidden"></div>
+      <div class="actions">
+        <button id="downloadBtn">Download</button>
+        <button id="clearBtn">Clear</button>
+      </div>
     </main>
 
     <footer>
-      <small>Demo — plays/downloads direct streams (CORS required)</small>
+      <p>© 2025 StreamBox — built for testing public video links only</p>
     </footer>
   </div>
 
-  <script src="script.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
