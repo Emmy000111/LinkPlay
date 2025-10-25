@@ -1,50 +1,112 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StreamBox+</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StreamBox+ — Web Player</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- hls.js for .m3u8 playback -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="wrapper">
-    <header>
-      <h1><span class="accent">Stream</span>Box+</h1>
-    </header>
+  <div id="app" class="app">
+    <nav class="topbar">
+      <div class="brand">
+        <div class="logo">Stream<span>Box+</span></div>
+      </div>
 
-    <main>
-      <section class="input-area">
-        <input
-          type="text"
-          id="streamLink"
-          placeholder="Paste or enter your video link..."
-        />
-        <button id="playBtn">Play</button>
-      </section>
+      <div class="top-actions">
+        <button id="themeToggle" class="icon-btn" title="Toggle theme">🌓</button>
+        <button id="downloadsBtn" class="icon-btn" title="My Downloads">⬇️</button>
+      </div>
+    </nav>
 
-      <section class="video-section">
-        <div class="video-container" id="videoContainer">
-          <video id="videoPlayer" controls></video>
-          <input type="file" id="subtitleInput" accept=".vtt,.srt" hidden />
+    <main class="main">
+      <section class="hero">
+        <div class="left">
+          <h1 class="title">Paste a streaming link. Watch like it's native.</h1>
+          <p class="sub">MP4 & HLS support • subtitles • offline • resume • mobile ready</p>
+
+          <div class="input-row">
+            <input id="linkInput" type="text" placeholder="Paste mp4 or m3u8 link here" autocomplete="off" />
+            <button id="loadBtn" class="cta">Load</button>
+          </div>
+
+          <div class="meta-row">
+            <input id="titleInput" type="text" placeholder="Optional: movie / show title (used for subtitle search)" />
+            <button id="searchSubsBtn" class="small">Search Subtitles</button>
+            <input id="subFile" type="file" accept=".vtt,.srt" style="display:none" />
+            <button id="addSubBtn" class="small">Upload Subtitle</button>
+          </div>
+
+          <div class="player-actions">
+            <button id="bookmarkBtn" class="ghost">Bookmark</button>
+            <button id="historyBtn" class="ghost">History</button>
+          </div>
         </div>
 
-        <div class="controls">
-          <button id="subBtn">Add Subtitles</button>
-          <button id="speedBtn">1x Speed</button>
-          <button id="downloadBtn">Download</button>
-          <button id="clearBtn">Clear</button>
+        <div class="right">
+          <div class="player-shell">
+            <div id="poster" class="poster">Preview</div>
+            <div class="video-frame">
+              <video id="player" playsinline></video>
+              <div id="controlsOverlay" class="controls-overlay hidden">
+                <!-- big controls -->
+                <button id="bigPlay" class="big-play">▶</button>
+              </div>
+            </div>
+
+            <div class="player-controls">
+              <div class="left-controls">
+                <button id="playPause" class="ctrl">⏯</button>
+                <button id="rew10" class="ctrl">⟲10</button>
+                <button id="fwd10" class="ctrl">10⟳</button>
+                <button id="frameBack" class="ctrl">◀︎1f</button>
+                <button id="frameFwd" class="ctrl">1f▶︎</button>
+                <div class="seek-wrap">
+                  <input id="seek" type="range" min="0" max="100" value="0" />
+                  <div class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
+                </div>
+              </div>
+
+              <div class="right-controls">
+                <button id="pipBtn" class="ctrl">⧉</button>
+                <button id="fullscreenBtn" class="ctrl">⛶</button>
+                <select id="speed" class="speed">
+                  <option>0.5x</option><option>0.75x</option><option selected>1x</option><option>1.25x</option><option>1.5x</option><option>2x</option>
+                </select>
+                <input id="vol" type="range" min="0" max="1" step="0.01" value="1" />
+                <button id="downloadNow" class="ctrl primary">Download</button>
+                <button id="saveSub" class="ctrl">Save Subtitle</button>
+              </div>
+            </div>
+
+            <div id="loader" class="loader hidden">Loading…</div>
+          </div>
         </div>
       </section>
 
-      <section class="tips">
-        <p>💡 Try this test link:<br>
-        <code>http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4</code></p>
+      <section class="lower">
+        <div class="panel" id="downloadsPanel">
+          <h3>My Downloads</h3>
+          <div id="downloadsList" class="list"></div>
+        </div>
+
+        <div class="panel" id="historyPanel">
+          <h3>Recent</h3>
+          <div id="historyList" class="list"></div>
+        </div>
+
+        <div class="panel" id="subsPanel">
+          <h3>Subtitle Results</h3>
+          <div id="subsList" class="list"></div>
+        </div>
       </section>
     </main>
 
-    <footer>
-      <p>© 2025 StreamBox+ • A smarter way to stream</p>
+    <footer class="footer">
+      <small>StreamBox+ — client demo. Use legal links only.</small>
     </footer>
   </div>
 </body>
