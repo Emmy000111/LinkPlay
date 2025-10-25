@@ -1,440 +1,288 @@
-/* StreamBox+ — advanced web player
-   NOTES:
-   - Replace OPEN_SUBS_KEY with your OpenSubtitles API key to enable subtitle search.
-   - CORS: remote video servers must allow CORS for fetching/downloading from browser.
+/* StreamBox+ v2 — Browser Mode + Link Finder + Bookmarklet
+   NOTE:
+   - Set OPEN_SUBS_KEY (OpenSubtitles API key) to enable subtitle search
+   - For scanning arbitrary pages, a CORS proxy is required (enter proxy URL in Proxy field).
+   - The bookmarklet is the reliable way to extract links from pages when CORS/iframe blocks exist.
 */
 
-const OPEN_SUBS_KEY = ""; // <-- GET A KEY from https://www.opensubtitles.com/ or use a proxy
+const OPEN_SUBS_KEY = ""; // <-- put OpenSubtitles API key here to enable auto subtitle search
 
-// DOM
-const linkInput = document.getElementById('linkInput');
-const loadBtn = document.getElementById('loadBtn');
-const player = document.getElementById('player');
-const playPause = document.getElementById('playPause');
-const rew10 = document.getElementById('rew10');
-const fwd10 = document.getElementById('fwd10');
-const seek = document.getElementById('seek');
-const curEl = document.getElementById('cur');
-const durEl = document.getElementById('dur');
-const speedSel = document.getElementById('speed');
-const vol = document.getElementById('vol');
-const fullscreenBtn = document.getElementById('fullscreenBtn');
-const pipBtn = document.getElementById('pipBtn');
-const downloadNow = document.getElementById('downloadNow');
-const addSubBtn = document.getElementById('addSubBtn');
-const subFile = document.getElementById('subFile');
-const searchSubsBtn = document.getElementById('searchSubsBtn');
-const titleInput = document.getElementById('titleInput');
-const subsList = document.getElementById('subsList');
-const historyList = document.getElementById('historyList');
-const downloadsList = document.getElementById('downloadsList');
-const bookmarkBtn = document.getElementById('bookmarkBtn');
-const historyBtn = document.getElementById('historyBtn');
-const bigPlay = document.getElementById('bigPlay');
-const loader = document.getElementById('loader');
-const controlsOverlay = document.getElementById('controlsOverlay');
-const downloadsPanel = document.getElementById('downloadsPanel');
-const historyPanel = document.getElementById('historyPanel');
+/**************** DOM ****************/
+const linkInput = byId('linkInput');
+const loadBtn = byId('loadBtn');
+const player = byId('player');
+const playPause = byId('playPause');
+const rew10 = byId('rew10');
+const fwd10 = byId('fwd10');
+const seek = byId('seek');
+const cur = byId('cur');
+const dur = byId('dur');
+const speed = byId('speed');
+const vol = byId('vol');
+const fullscreenBtn = byId('fullscreenBtn');
+const pipBtn = byId('pipBtn');
+const downloadNow = byId('downloadNow');
+const addSubBtn = byId('addSubBtn');
+const subFile = byId('subFile');
+const searchSubsBtn = byId('searchSubsBtn');
+const titleInput = byId('titleInput');
+const subsList = byId('subsList');
+const historyList = byId('historyList');
+const downloadsList = byId('downloadsList');
+const bookmarkBtn = byId('bookmarkBtn');
+const historyBtn = byId('historyBtn');
+const bigPlay = byId('bigPlay') || {};
+const loader = byId('loader');
+const linkResults = byId('foundLinks');
+
+const browseUrl = byId('browseUrl');
+const openBrowser = byId('openBrowser');
+const siteFrame = byId('siteFrame');
+const backBtn = byId('backBtn');
+const forwardBtn = byId('forwardBtn');
+const reloadBtn = byId('reloadBtn');
+const proxyInput = byId('proxyInput');
+const scanBtn = byId('scanBtn');
+const generateBookmarklet = byId('generateBookmarklet');
+const bookmarkletContainer = byId('bookmarkletContainer');
 
 let hls = null;
 let currentUrl = null;
-let currentTitle = null;
 let subtitleTrackEl = null;
-let isPlaying = false;
-let resumeKeyPrefix = 'streambox_resume_';
-let bookmarksKey = 'streambox_bookmarks';
-let historyKey = 'streambox_history';
+let currentTitle = null;
 
-// Utilities
-const $ = (id) => document.getElementById(id);
-function showLoader(show){ loader.classList.toggle('hidden', !show); }
-function formatTime(s){ if (!s || isNaN(s)) return '0:00'; const m = Math.floor(s/60); const sec = String(Math.floor(s%60)).padStart(2,'0'); return `${m}:${sec}`; }
+/************ Utilities ************/
+function byId(id){ return document.getElementById(id); }
+function show(id, v=true){ id.classList.toggle('hidden', !v); }
+function fmt(t){ if(!t||isNaN(t)) return '0:00'; const m=Math.floor(t/60); const s=String(Math.floor(t%60)).padStart(2,'0'); return `${m}:${s}`; }
 
-// Initialize UI state
-(function init(){
-  // event bindings
-  loadBtn.addEventListener('click', () => loadAndPlay(linkInput.value.trim()));
-  playPause.addEventListener('click', togglePlay);
-  bigPlay.addEventListener('click', togglePlay);
-  rew10.addEventListener('click', ()=> seekBy(-10));
-  fwd10.addEventListener('click', ()=> seekBy(10));
-  frameBack.addEventListener('click', ()=> stepFrame(-1));
-  frameFwd.addEventListener('click', ()=> stepFrame(1));
-  speedSel.addEventListener('change', ()=> player.playbackRate = parseFloat(speedSel.value));
-  vol.addEventListener('input', ()=> player.volume = parseFloat(vol.value));
-  fullscreenBtn.addEventListener('click', toggleFullscreen);
-  pipBtn.addEventListener('click', togglePip);
-  downloadNow.addEventListener('click', downloadCurrentVideo);
-  addSubBtn.addEventListener('click', ()=> subFile.click());
-  subFile.addEventListener('change', handleSubtitleUpload);
-  searchSubsBtn.addEventListener('click', searchSubtitles);
-  bookmarkBtn.addEventListener('click', toggleBookmark);
-  historyBtn.addEventListener('click', showHistoryPanel);
+/************ Player core ************/
+loadBtn.addEventListener('click', ()=> loadAndPlay(linkInput.value.trim()));
+playPause.addEventListener('click', ()=> player.paused ? player.play() : player.pause());
+rew10.addEventListener('click', ()=> seekBy(-10));
+fwd10.addEventListener('click', ()=> seekBy(10));
+speed.addEventListener('change', ()=> player.playbackRate = parseFloat(speed.value));
+vol.addEventListener('input', ()=> player.volume = parseFloat(vol.value));
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+pipBtn.addEventListener('click', togglePip);
+downloadNow.addEventListener('click', downloadCurrentVideo);
 
-  player.addEventListener('timeupdate', onTimeUpdate);
-  player.addEventListener('loadedmetadata', onLoadedMeta);
-  player.addEventListener('play', ()=> isPlaying=true);
-  player.addEventListener('pause', ()=> isPlaying=false);
-  seek.addEventListener('input', onSeekInput);
-  document.addEventListener('keydown', onKeyDown);
+player.addEventListener('timeupdate', ()=>{
+  if(player.duration){ seek.value = (player.currentTime/player.duration)*100; cur.textContent = fmt(player.currentTime); dur.textContent = fmt(player.duration); saveResume(); }
+});
+seek.addEventListener('input', ()=> { if(player.duration) player.currentTime = (seek.value/100)*player.duration; });
 
-  // mobile gestures: tap to pause/play, horizontal swipe to seek
-  let touchStartX=null;
-  player.addEventListener('touchstart', e => { if(e.touches && e.touches[0]) touchStartX = e.touches[0].clientX; });
-  player.addEventListener('touchend', e => {
-    if(touchStartX==null) return;
-    const dx = (e.changedTouches[0].clientX - touchStartX);
-    if(Math.abs(dx) < 10){ togglePlay(); } else {
-      seekBy(dx > 0 ? 10 : -10);
-    }
-    touchStartX = null;
-  });
-
-  // restore lists
-  renderHistory();
-  renderDownloadsList();
-})();
-
-// Load + play a link (MP4 or HLS)
 async function loadAndPlay(url){
-  if(!url) { alert('Paste a link first'); return; }
+  if(!url){ alert('Paste a link first'); return; }
   currentUrl = url;
   currentTitle = titleInput.value.trim() || deriveTitleFromUrl(url);
-  showLoader(true);
-
-  // cleanup old hls
+  show(loader, true);
+  // cleanup
   if(hls){ try{ hls.destroy(); }catch(e){} hls = null; }
-
   try{
     if(url.endsWith('.m3u8')){
       if(Hls.isSupported()){
         hls = new Hls();
         hls.loadSource(url);
         hls.attachMedia(player);
-        hls.on(Hls.Events.MANIFEST_PARSED, ()=> { player.play().catch(()=>{}); showLoader(false); });
+        hls.on(Hls.Events.MANIFEST_PARSED, ()=> { player.play().catch(()=>{}); show(loader,false); });
       } else {
         player.src = url;
         await player.play().catch(()=>{});
-        showLoader(false);
+        show(loader,false);
       }
     } else {
       player.src = url;
       await player.play().catch(()=>{});
-      showLoader(false);
+      show(loader,false);
     }
     saveHistory({title:currentTitle,url:currentUrl,time:Date.now()});
     restoreResume();
-    updatePoster(false);
-  } catch(err){
-    console.error(err);
-    showLoader(false);
-    alert('Failed to load the video. Check the link or CORS policy.');
-  }
-}
-
-// derive title
-function deriveTitleFromUrl(url){
-  try {
-    const p = new URL(url).pathname;
-    const n = p.split('/').pop();
-    return decodeURIComponent(n || 'Unknown');
-  } catch { return url; }
-}
-
-// playback helpers
-function togglePlay(){ if(player.paused) player.play(); else player.pause(); }
-function seekBy(sec){ player.currentTime = Math.max(0, Math.min((player.duration||0), player.currentTime + sec)); }
-function onLoadedMeta(){ durEl.textContent = formatTime(player.duration || 0); }
-function onTimeUpdate(){
-  if(!isNaN(player.duration) && player.duration>0){
-    const pct = (player.currentTime / player.duration) * 100;
-    seek.value = pct;
-    curEl.textContent = formatTime(player.currentTime);
-    durEl.textContent = formatTime(player.duration);
-    saveResume();
-  }
-}
-function onSeekInput(){ if(!isNaN(player.duration)) player.currentTime = (seek.value/100) * player.duration; }
-
-// frame-by-frame (approx, uses small increment)
-function stepFrame(frames){
-  const fps = 25; // approximate
-  const step = frames * (1/fps);
-  player.currentTime = Math.max(0, Math.min((player.duration||0), player.currentTime + step));
-}
-
-// fullscreen
-async function toggleFullscreen(){
-  if(document.fullscreenElement) await document.exitFullscreen();
-  else await document.documentElement.requestFullscreen();
-}
-
-// Picture-in-Picture
-async function togglePip(){
-  try{
-    if(document.pictureInPictureElement) await document.exitPictureInPicture();
-    else await player.requestPictureInPicture();
-  }catch(e){ console.warn('PiP error',e); alert('Picture-in-Picture not supported'); }
-}
-
-// download current video (fetch -> IndexedDB)
-async function downloadCurrentVideo(){
-  if(!currentUrl){ alert('Load a video first'); return; }
-  try{
-    showLoader(true);
-    const resp = await fetch(currentUrl);
-    if(!resp.ok) throw new Error('Network error '+resp.status);
-    const blob = await resp.blob();
-    const name = (currentTitle || deriveTitleFromUrl(currentUrl)).replace(/\s+/g,'_');
-    await saveBlobToIndexedDB(name, blob);
-    showLoader(false);
-    renderDownloadsList();
-    alert('Saved to Downloads');
+    renderHistory(); renderDownloads();
   }catch(err){
-    showLoader(false);
-    console.error(err);
-    alert('Download failed (CORS or large file). Use server proxy for robust downloading.');
+    console.error(err); show(loader,false); alert('Failed to load video (CORS or network).');
   }
 }
 
-/* ---------- IndexedDB helper for downloads ---------- */
-const DB_NAME = 'streambox_db_v1', STORE = 'videos';
-function openDB(){
-  return new Promise((resolve,reject)=>{
-    const rq = indexedDB.open(DB_NAME,1);
-    rq.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'});
-    };
-    rq.onsuccess = (e) => resolve(e.target.result);
-    rq.onerror = (e) => reject(e.target.error);
-  });
-}
-async function saveBlobToIndexedDB(name, blob){
-  const db = await openDB();
-  const tx = db.transaction(STORE,'readwrite');
-  const store = tx.objectStore(STORE);
-  const id = 'v_' + Date.now();
-  store.put({id,name,blob,created:Date.now()});
-  return new Promise((res,rej)=>{
-    tx.oncomplete = ()=> res();
-    tx.onerror = (e)=> rej(e);
-  });
-}
-async function getAllDownloads(){
-  const db = await openDB();
-  const tx = db.transaction(STORE,'readonly');
-  const store = tx.objectStore(STORE);
-  return new Promise((res,rej)=>{
-    const rq = store.getAll();
-    rq.onsuccess = ()=> res(rq.result);
-    rq.onerror = ()=> rej(rq.error);
-  });
-}
-async function deleteDownload(id){
-  const db = await openDB();
-  const tx = db.transaction(STORE,'readwrite');
-  tx.objectStore(STORE).delete(id);
-  return new Promise((res)=> tx.oncomplete = ()=> res());
-}
+function seekBy(sec){ player.currentTime = Math.max(0, Math.min(player.duration||0, player.currentTime + sec)); }
+function toggleFullscreen(){ if(document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }
+async function togglePip(){ try{ if(document.pictureInPictureElement) await document.exitPictureInPicture(); else await player.requestPictureInPicture(); }catch(e){ alert('PiP not supported'); } }
 
-async function renderDownloadsList(){
-  const items = await getAllDownloads();
-  downloadsList.innerHTML = '';
-  if(items.length === 0){ downloadsList.innerHTML = '<div class="item">No downloads</div>'; return; }
-  items.sort((a,b)=>b.created-a.created).forEach(it => {
-    const div = document.createElement('div'); div.className='item';
-    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = it.name;
-    const playBtn = document.createElement('button'); playBtn.textContent='Play'; playBtn.onclick = ()=> {
-      const url = URL.createObjectURL(it.blob);
-      loadLocalBlob(url);
-    };
-    const saveBtn = document.createElement('button'); saveBtn.textContent='Save'; saveBtn.onclick = ()=> {
-      const a = document.createElement('a'); a.href = URL.createObjectURL(it.blob); a.download = it.name; document.body.appendChild(a); a.click(); a.remove();
-    };
-    const delBtn = document.createElement('button'); delBtn.textContent='Delete'; delBtn.onclick = async ()=>{ await deleteDownload(it.id); renderDownloadsList(); };
-    div.appendChild(meta); div.appendChild(playBtn); div.appendChild(saveBtn); div.appendChild(delBtn);
-    downloadsList.appendChild(div);
-  });
-}
-function loadLocalBlob(url){
-  // stops hls if any
-  if(hls){ try{ hls.destroy(); }catch(e){} hls=null; }
-  player.src = url; player.play().catch(()=>{});
-}
+/************ Bookmarklet generator ************/
+generateBookmarklet.addEventListener('click', ()=>{
+  const bmCode = `javascript:(function(){try{const found=[];document.querySelectorAll('video, source, a[href]').forEach(n=>{let s=n.src||n.href; if(s && (s.match(/\\.m3u8($|\\?)/i) || s.match(/\\.mp4($|\\?)/i))) found.push(s)}); if(found.length){ const txt=found.filter((v,i)=>found.indexOf(v)===i).join('\\n'); try{navigator.clipboard.writeText(txt).then(()=>alert('Copied '+found.length+' link(s) to clipboard'));}catch(e){ prompt('Copy links:', txt);} } else alert('No mp4/m3u8 links found on this page'); }catch(e){alert('Error: '+e)}})();`;
+  const short = bmCode; // already compact
+  bookmarkletContainer.textContent = '';
+  const a = document.createElement('a'); a.href = short; a.textContent = 'Drag this to your bookmarks bar: [Extract Video Links]'; a.style.color = '#fff'; a.style.display='inline-block'; a.style.padding='6px 8px'; a.style.background='#111'; a.style.borderRadius='6px'; bookmarkletContainer.appendChild(a);
+  const txtBox = document.createElement('textarea'); txtBox.rows=3; txtBox.style.width='100%'; txtBox.value = short; bookmarkletContainer.appendChild(txtBox);
+  alert('Bookmarklet generated — drag to bookmarks or copy the code into a new bookmark.');
+});
 
-/* ---------- History & Bookmarks ---------- */
-function saveHistory(entry){
+/************ Scan page via optional proxy ************/
+openBrowser.addEventListener('click', ()=>{
+  let url = browseUrl.value.trim();
+  if(!url) { alert('Enter a URL to open in browser mode'); return; }
+  if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  siteFrame.src = url;
+});
+
+backBtn.addEventListener('click', ()=> { try{ siteFrame.contentWindow.history.back(); }catch(e){ /* cross-origin may block */ }});
+forwardBtn.addEventListener('click', ()=> { try{ siteFrame.contentWindow.history.forward(); }catch(e){} });
+reloadBtn.addEventListener('click', ()=> { siteFrame.src = siteFrame.src; });
+
+scanBtn.addEventListener('click', async ()=>{
+  const pageUrl = siteFrame.src || browseUrl.value.trim();
+  const proxy = proxyInput.value.trim();
+  if(!pageUrl){ alert('Open the page you want to scan first'); return; }
+  if(!proxy){ alert('Enter a CORS proxy URL to enable scanning (or use the bookmarklet)'); return; }
   try{
-    const arr = JSON.parse(localStorage.getItem(historyKey) || '[]');
-    arr.unshift(entry);
-    const trimmed = arr.slice(0,50);
-    localStorage.setItem(historyKey, JSON.stringify(trimmed));
-    renderHistory();
-  }catch(e){}
+    show(loader,true);
+    const fetchUrl = proxy + encodeURIComponent(pageUrl);
+    const res = await fetch(fetchUrl);
+    if(!res.ok) throw new Error('Fetch failed ' + res.status);
+    const html = await res.text();
+    const links = extractVideoLinksFromHtml(html);
+    renderFoundLinks(links);
+    show(loader,false);
+  }catch(err){
+    console.error(err); show(loader,false); alert('Scan failed: ' + err.message);
+  }
+});
+
+function extractVideoLinksFromHtml(html){
+  const out = [];
+  const mp4s = html.match(/https?:\/\/[^"'<>\\s]+?\\.mp4(?:\\?[^"'<>\\s]*)?/ig) || [];
+  const m3u8 = html.match(/https?:\/\/[^"'<>\\s]+?\\.m3u8(?:\\?[^"'<>\\s]*)?/ig) || [];
+  mp4s.concat(m3u8).forEach(u=>{ if(!out.includes(u)) out.push(u); });
+  return out;
 }
-function renderHistory(){
-  const arr = JSON.parse(localStorage.getItem(historyKey) || '[]');
-  historyList.innerHTML = '';
-  if(arr.length===0){ historyList.innerHTML = '<div class="item">No history</div>'; return; }
-  arr.forEach(it=>{
+
+function renderFoundLinks(links){
+  linkResults.innerHTML = '';
+  if(!links.length) { linkResults.innerHTML = '<div class="item">No links found</div>'; return; }
+  links.forEach(l=>{
     const div = document.createElement('div'); div.className='item';
-    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = it.title;
-    const openBtn = document.createElement('button'); openBtn.textContent='Open'; openBtn.onclick = ()=> { linkInput.value = it.url; titleInput.value = it.title; loadAndPlay(it.url); };
-    historyList.appendChild(div); div.appendChild(meta); div.appendChild(openBtn);
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = l;
+    const copyBtn = document.createElement('button'); copyBtn.textContent='Copy'; copyBtn.onclick = ()=> { navigator.clipboard.writeText(l).then(()=>alert('Copied')); };
+    const loadBtn = document.createElement('button'); loadBtn.textContent='Load'; loadBtn.onclick = ()=> { linkInput.value = l; loadAndPlay(l); };
+    div.appendChild(meta); div.appendChild(copyBtn); div.appendChild(loadBtn);
+    linkResults.appendChild(div);
   });
 }
-function showHistoryPanel(){ historyPanel.scrollIntoView({behavior:'smooth'}); }
 
-/* bookmarks */
-function toggleBookmark(){
-  const bookmarks = JSON.parse(localStorage.getItem(bookmarksKey) || '[]');
-  const exists = bookmarks.find(b=>b.url===currentUrl);
-  if(exists){
-    const filtered = bookmarks.filter(b=>b.url!==currentUrl);
-    localStorage.setItem(bookmarksKey, JSON.stringify(filtered));
-    alert('Removed bookmark');
-  } else {
-    bookmarks.push({url:currentUrl,title:currentTitle||deriveTitleFromUrl(currentUrl),created:Date.now()});
-    localStorage.setItem(bookmarksKey, JSON.stringify(bookmarks));
-    alert('Bookmarked');
-  }
-}
-
-/* ---------- Subtitles: upload and search ---------- */
-function handleSubtitleUpload(ev){
-  const file = ev.target.files[0];
-  if(!file) return;
-  addSubtitleFromFile(file);
-}
-function addSubtitleFromFile(file){
-  const track = document.createElement('track');
-  track.kind='subtitles'; track.label = file.name; track.srclang='en'; track.default = true;
-  track.src = URL.createObjectURL(file);
-  // remove old track
-  if(subtitleTrackEl) subtitleTrackEl.remove();
-  player.appendChild(track);
-  subtitleTrackEl = track;
-  alert('Subtitle added');
-}
-
-// Auto-search using OpenSubtitles
-async function searchSubtitles(){
+/************ Subtitles (OpenSubtitles quick integration) ************/
+searchSubsBtn.addEventListener('click', async ()=>{
   const title = titleInput.value.trim();
-  if(!title){ alert('Enter a title for subtitle search'); return; }
-  if(!OPEN_SUBS_KEY){ alert('Subtitle search requires OpenSubtitles API key. Set OPEN_SUBS_KEY in app.js'); return; }
+  if(!title) return alert('Enter a title to search subtitles');
+  if(!OPEN_SUBS_KEY) return alert('Set OpenSubtitles API key in app.js to use subtitle search');
   subsList.innerHTML = '<div class="item">Searching…</div>';
   try{
-    // simple search endpoint
-    const q = encodeURIComponent(title);
-    const url = `https://api.opensubtitles.com/api/v1/subtitles?query=${q}&languages=en`;
-    const res = await fetch(url, { headers: { 'Api-Key': OPEN_SUBS_KEY, 'Content-Type': 'application/json' }});
-    if(!res.ok) throw new Error('Search error '+res.status);
-    const data = await res.json();
-    const list = data.data || [];
-    renderSubs(list);
-  }catch(err){
-    console.error(err);
-    subsList.innerHTML = '<div class="item">Subtitle search failed (CORS or key issue)</div>';
-  }
-}
-
-function renderSubs(list){
-  subsList.innerHTML = '';
-  if(!list.length){ subsList.innerHTML = '<div class="item">No subtitles found</div>'; return; }
-  list.slice(0,10).forEach(s=>{
-    const div = document.createElement('div'); div.className='item';
-    const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = `<strong>${s.attributes.release || s.attributes.filename}</strong><div style="font-size:12px;color:#bbb">${s.attributes.language} • ${s.attributes.download_count || 0} downloads</div>`;
-    const getBtn = document.createElement('button'); getBtn.textContent='Load'; getBtn.onclick = ()=> fetchAndAttachSubtitle(s);
-    div.appendChild(meta); div.appendChild(getBtn);
-    subsList.appendChild(div);
-  });
-}
+    const url = `https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(title)}&languages=en`;
+    const res = await fetch(url, { headers: {'Api-Key': OPEN_SUBS_KEY} });
+    if(!res.ok) throw new Error('Search failed: '+res.status);
+    const j = await res.json();
+    const list = j.data || [];
+    subsList.innerHTML = '';
+    if(!list.length) subsList.innerHTML = '<div class="item">No subtitles found</div>';
+    list.slice(0,10).forEach(s=>{
+      const div = document.createElement('div'); div.className='item';
+      const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = `<strong>${s.attributes.filename || s.attributes.release}</strong><div style="font-size:12px;color:#bbb">${s.attributes.language}</div>`;
+      const loadBtn = document.createElement('button'); loadBtn.textContent='Load'; loadBtn.onclick = ()=> fetchAndAttachSubtitle(s);
+      div.appendChild(meta); div.appendChild(loadBtn); subsList.appendChild(div);
+    });
+  }catch(err){ console.error(err); subsList.innerHTML = '<div class="item">Search failed</div>'; }
+});
 
 async function fetchAndAttachSubtitle(subItem){
-  // subItem.attributes.files may contain file URL or file_id to fetch
   try{
-    showLoader(true);
-    // try to get file download link (OpenSubtitles provides file_id downloadable via other endpoint)
+    show(loader,true);
     const fileId = subItem.attributes.files && subItem.attributes.files[0] && subItem.attributes.files[0].file_id;
-    if(!fileId){ alert('No direct file available'); showLoader(false); return; }
-    const url = `https://api.opensubtitles.com/api/v1/download`;
-    const body = JSON.stringify({file_id: fileId});
-    const res = await fetch(url, { method:'POST', headers: {'Api-Key': OPEN_SUBS_KEY, 'Content-Type':'application/json'}, body});
-    const j = await res.json();
-    if(!j || !j.link) { alert('Failed to get subtitle link'); showLoader(false); return;}
-    const subResp = await fetch(j.link);
-    const subText = await subResp.text();
+    if(!fileId) { alert('No downloadable file found'); show(loader,false); return; }
+    const tokenRes = await fetch('https://api.opensubtitles.com/api/v1/download', {
+      method:'POST', headers: {'Api-Key': OPEN_SUBS_KEY, 'Content-Type': 'application/json'},
+      body: JSON.stringify({file_id: fileId})
+    });
+    const json = await tokenRes.json();
+    if(!json || !json.link) { alert('Failed to obtain subtitle link'); show(loader,false); return; }
+    const subTextRes = await fetch(json.link);
+    const subText = await subTextRes.text();
     const blob = new Blob([subText], {type:'text/vtt'});
-    addSubtitleFromBlob(blob, subItem.attributes.filename || 'subtitle.vtt');
-    showLoader(false);
-  }catch(err){
-    showLoader(false);
-    console.error(err);
-    alert('Failed to fetch subtitle (CORS / key / rate limit). You may need a proxy.');
-  }
+    addSubtitleBlob(blob, subItem.attributes.filename || 'subtitle.vtt');
+    show(loader,false);
+  }catch(err){ console.error(err); show(loader,false); alert('Failed to fetch subtitle (CORS/rate limit)'); }
 }
 
-function addSubtitleFromBlob(blob, name){
-  const track = document.createElement('track');
-  track.kind='subtitles'; track.label = name; track.srclang='en'; track.default = true;
-  track.src = URL.createObjectURL(blob);
+function addSubtitleBlob(blob, name){
   if(subtitleTrackEl) subtitleTrackEl.remove();
-  player.appendChild(track); subtitleTrackEl = track;
+  const tr = document.createElement('track'); tr.kind='subtitles'; tr.label = name; tr.srclang='en'; tr.default = true;
+  tr.src = URL.createObjectURL(blob);
+  player.appendChild(tr);
+  subtitleTrackEl = tr;
   alert('Subtitle attached');
 }
 
-/* save subtitle (download)
-   Note: saves currently attached subtitle track text to disk
-*/
-document.getElementById('saveSub').addEventListener('click', async ()=>{
-  if(!subtitleTrackEl){ alert('No subtitle attached'); return; }
+/************ Downloads (IndexedDB) ************/
+const DB_NAME='sb_v2_db', STORE='videos';
+async function openDB(){
+  return new Promise((res,rej)=>{
+    const rq = indexedDB.open(DB_NAME,1);
+    rq.onupgradeneeded = e => { const db=e.target.result; if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'}); };
+    rq.onsuccess = e => res(e.target.result);
+    rq.onerror = e => rej(e);
+  });
+}
+async function saveBlob(name, blob){
+  const db = await openDB(); const tx = db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put({id:'v_'+Date.now(),name,blob,created:Date.now()});
+  return new Promise((res,rej)=>{ tx.oncomplete = ()=> res(); tx.onerror = e => rej(e); });
+}
+async function getAllDownloads(){ const db = await openDB(); return new Promise((res,rej)=>{ const rq=db.transaction(STORE).objectStore(STORE).getAll(); rq.onsuccess = ()=> res(rq.result); rq.onerror = ()=> rej(rq.error); }); }
+async function deleteDownload(id){ const db = await openDB(); const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).delete(id); return new Promise(res=> tx.oncomplete=()=>res()); }
+
+async function downloadCurrentVideo(){
+  if(!currentUrl) return alert('Load a video first');
   try{
-    const resp = await fetch(subtitleTrackEl.src);
-    const txt = await resp.blob();
-    const a = document.createElement('a'); a.href = URL.createObjectURL(txt); a.download = subtitleTrackEl.label || 'subtitle.vtt'; document.body.appendChild(a); a.click(); a.remove();
-  }catch(e){ alert('Save failed'); }
-});
-
-/* ---------- Resume watching ---------- */
-function saveResume(){
-  if(!currentUrl) return;
-  const key = resumeKeyPrefix + btoa(currentUrl);
-  const state = {time: player.currentTime, last: Date.now(), title: currentTitle};
-  localStorage.setItem(key, JSON.stringify(state));
-}
-function restoreResume(){
-  if(!currentUrl) return;
-  const key = resumeKeyPrefix + btoa(currentUrl);
-  const raw = localStorage.getItem(key);
-  if(!raw) return;
-  try{
-    const s = JSON.parse(raw);
-    if(s && s.time && confirm(`Resume from ${formatTime(s.time)}?`)) player.currentTime = s.time;
-  }catch(e){}
+    show(loader,true);
+    const r = await fetch(currentUrl);
+    if(!r.ok) throw new Error('Fetch failed '+r.status);
+    const blob = await r.blob();
+    const name = (titleInput.value.trim() || deriveTitleFromUrl(currentUrl)).replace(/\s+/g,'_');
+    await saveBlob(name, blob);
+    show(loader,false);
+    alert('Saved to downloads');
+    renderDownloads();
+  }catch(err){ show(loader,false); console.error(err); alert('Download failed (CORS or large file)'); }
 }
 
-/* ---------- Keyboard shortcuts ---------- */
-function onKeyDown(e){
-  if(e.code === 'Space'){ e.preventDefault(); togglePlay(); }
-  if(e.key === 'ArrowRight') seekBy(5);
-  if(e.key === 'ArrowLeft') seekBy(-5);
-  if(e.key === 'f') toggleFullscreen();
-  if(e.key === 'm') player.muted = !player.muted;
-  if(e.key === ',') stepFrame(-1);
-  if(e.key === '.') stepFrame(1);
-  if(e.key === '>') player.playbackRate = Math.min(2, player.playbackRate + 0.25);
-  if(e.key === '<') player.playbackRate = Math.max(0.5, player.playbackRate - 0.25);
+async function renderDownloads(){
+  const items = await getAllDownloads();
+  downloadsList.innerHTML = ''; if(!items.length) { downloadsList.innerHTML = '<div class="item">No downloads</div>'; return; }
+  items.sort((a,b)=>b.created-a.created).forEach(it=>{
+    const div = document.createElement('div'); div.className='item';
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = it.name;
+    const play = document.createElement('button'); play.textContent='Play'; play.onclick = ()=> { loadLocalBlob(URL.createObjectURL(it.blob)); };
+    const save = document.createElement('button'); save.textContent='Save'; save.onclick = ()=> { const a=document.createElement('a'); a.href=URL.createObjectURL(it.blob); a.download=it.name; document.body.appendChild(a); a.click(); a.remove(); };
+    const del = document.createElement('button'); del.textContent='Delete'; del.onclick = async ()=>{ await deleteDownload(it.id); renderDownloads(); };
+    div.appendChild(meta); div.appendChild(play); div.appendChild(save); div.appendChild(del); downloadsList.appendChild(div);
+  });
 }
+function loadLocalBlob(url){ if(hls){ try{ hls.destroy(); }catch(e){} hls=null; } player.src = url; player.play().catch(()=>{}); }
 
-/* ---------- small helpers ---------- */
-function updatePoster(visible=true){
-  document.getElementById('poster').style.display = visible ? 'block' : 'none';
-}
+/************ History & Resume ************/
+const HS_KEY='sb_history';
+function saveHistory(entry){ const arr = JSON.parse(localStorage.getItem(HS_KEY)||'[]'); arr.unshift(entry); localStorage.setItem(HS_KEY, JSON.stringify(arr.slice(0,50))); renderHistory(); }
+function renderHistory(){ const arr = JSON.parse(localStorage.getItem(HS_KEY)||'[]'); historyList.innerHTML=''; if(!arr.length) { historyList.innerHTML='<div class="item">No history</div>'; return; } arr.forEach(it=>{ const div=document.createElement('div'); div.className='item'; const meta=document.createElement('div'); meta.className='meta'; meta.textContent=it.title || it.url; const open=document.createElement('button'); open.textContent='Open'; open.onclick=()=>{ linkInput.value=it.url; titleInput.value=it.title||''; loadAndPlay(it.url); }; div.appendChild(meta); div.appendChild(open); historyList.appendChild(div); }); }
+function saveResume(){ if(!currentUrl) return; localStorage.setItem('resume_'+btoa(currentUrl), JSON.stringify({time:player.currentTime, last:Date.now(), title:currentTitle})); }
+function restoreResume(){ const raw = localStorage.getItem('resume_'+btoa(currentUrl)); if(!raw) return; try{ const s=JSON.parse(raw); if(s && s.time && confirm(`Resume from ${fmt(s.time)}?`)) player.currentTime = s.time; }catch(e){} }
 
-/* ---------- initial render ---------- */
-renderHistory();
-renderDownloadsList();
+/************ Sub Upload ************/
+addSubBtn.addEventListener('click', ()=> subFile.click());
+subFile.addEventListener('change', (e)=>{ const f=e.target.files[0]; if(!f) return; if(subtitleTrackEl) subtitleTrackEl.remove(); const tr=document.createElement('track'); tr.kind='subtitles'; tr.label=f.name; tr.src=URL.createObjectURL(f); tr.default=true; player.appendChild(tr); subtitleTrackEl=tr; alert('Subtitle added'); });
 
-/* ---------- expose some funcs for debugging ---------- */
-window._sb = { loadAndPlay, renderDownloadsList, renderHistory, downloadCurrentVideo };
+/************ Helpers ************/
+function deriveTitleFromUrl(url){ try{ const p=new URL(url).pathname; return decodeURIComponent(p.split('/').pop()||url); }catch(e){return url;} }
+
+/************ Init ************/
+(async function(){ renderHistory(); renderDownloads(); })();
+
+/* expose for debugging */
+window.SB = { loadAndPlay, renderDownloads, renderHistory, generateBookmarklet };
